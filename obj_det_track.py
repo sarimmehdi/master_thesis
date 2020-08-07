@@ -574,7 +574,7 @@ coco_labels = [
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_loc',
-                    default='/mnt/sdb1/datasets/kitti_tracking/training/0019', type=str,
+                    default='/mnt/sdb1/datasets/kitti_tracking/training/0001', type=str,
                     help='your data folder location')
 parser.add_argument('--velo_type', default='velodyne', type=str, help='choices: velodyne, fake_velodyne')
 parser.add_argument('--operation_type', default='ROAD CLASSIFICATION', type=str,
@@ -585,12 +585,11 @@ args = parser.parse_args()
 
 #folder locations
 left_img_folder = os.path.join(args.data_loc, 'image_2')
-right_img_folder = os.path.join(args.data_loc, 'image_3')
 calib_folder = os.path.join(args.data_loc, 'calib')
 velo_folder = os.path.join(args.data_loc, args.velo_type)
 label_folder = os.path.join(args.data_loc, 'label_2')
 
-allowable_dets = ['Car', 'Pedestrian', 'Cyclist']
+allowable_dets = ['Car', 'Pedestrian', 'Cyclist', 'VEHICLE', 'PEDESTRIAN', 'CYCLIST']
 
 if args.operation_type in ['TRAJECTORY PRED 3D PROP', 'POTENTIAL FIELD', 'ROAD CLASSIFICATION']:
     pred_3dprop_folder = os.path.join(args.data_loc, '3DPROP')
@@ -653,10 +652,16 @@ if args.operation_type in ['TRAJECTORY PRED 3D PROP', 'POTENTIAL FIELD', 'ROAD C
         panop_img = cv2.cvtColor(panop_img, cv2.COLOR_BGR2GRAY)
         all_dets = []
         for name, box in zip(names, boxes):
-            bbox3d_loc = box[3:6]
-            bbox3d_dims = box[:3]
             bbox3d_roty = box[-1]
             dist = np.linalg.norm(box[3:6])
+            all_dets.append({'name': name, 'roty': bbox3d_roty, 'bbox3d': box[:6], 'dist': dist})
+            bbox3d_loc = box[3:6]
+            bbox3d_dims = box[:3]
+            # _ = plot_3d_bbox(loaded_img, clb, bbox3d_loc, bbox3d_dims, bbox3d_roty)
+        # loaded_img = cv2.resize(loaded_img, (1280, 720))
+        # cv2.imshow('', loaded_img)
+        # cv2.waitKey(5000)
+        # continue
 
         # load velodyne points
         if not os.path.exists(os.path.join(velo_folder, frame_num_str+'.bin')): continue
@@ -722,6 +727,7 @@ if args.operation_type in ['TRAJECTORY PRED 3D PROP', 'POTENTIAL FIELD', 'ROAD C
 
         # do road classification
         blank_image = np.zeros((height, width, channels), np.uint8)
+        print(all_dets)
         while args.operation_type == 'ROAD CLASSIFICATION':
             theta = all_dets[object_iter]['roty']
             name = all_dets[object_iter]['name']
@@ -745,7 +751,7 @@ if args.operation_type in ['TRAJECTORY PRED 3D PROP', 'POTENTIAL FIELD', 'ROAD C
             for angle in all_angles:
                 generate_position_heatmap(panop_img, loaded_img, temp_blank_image,
                                           clb, angle, all_dets[object_iter])
-            blank_image = cv2.addWeighted(temp_blank_image, 1.0, blank_image, 1.0, 0)
+            blank_image = blank_image + temp_blank_image
             display_dict['img'], display_dict['pt_img'] = loaded_img, pt_cloud_img
             if object_iter < len(all_dets) - 1: object_iter += 1
             else: break     # if you have arrived at the end of your object list, then leave
