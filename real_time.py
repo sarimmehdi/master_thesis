@@ -7,7 +7,6 @@ import numpy as np
 from colour import Color
 from pathlib import Path
 from math import sin, cos, atan2, degrees
-from multiprocessing import Process
 
 def get_pts_from_vel(velo_pts, calib):
     P2 = calib['P2']
@@ -41,8 +40,8 @@ def is_road(point, panop_img, P2, R0, Tr):
 # generate different perspective for non-velo points
 def diff_persp_not_velo(pts, calib, offsetx, offsety, offsetz, invert_axes):
     points = pts.reshape((-1, 4))
-    points[:,0], points[:,1], points[:,2] = points[:,0] + offsetx, \
-                                            points[:,1] + offsety, \
+    points[:,0], points[:,1], points[:,2] = points[:,0] + offsetx, 
+                                            points[:,1] + offsety, 
                                             points[:,2] + offsetz
     axis1, axis2 = invert_axes
     points[:,axis1] = points[:,axis1]*cos(np.pi/18) - points[:,axis2]*sin(np.pi/18)
@@ -55,8 +54,8 @@ def diff_persp_not_velo(pts, calib, offsetx, offsety, offsetz, invert_axes):
 # generate different perspective for velo points
 def diff_persp_is_velo(pts, panop_img, calib, offsetx, offsety, offsetz, invert_axes):
     points = pts.reshape((-1, 4))
-    points[:,0], points[:,1], points[:,2] = points[:,0] + offsetx, \
-                                            points[:,1] + offsety, \
+    points[:,0], points[:,1], points[:,2] = points[:,0] + offsetx, 
+                                            points[:,1] + offsety, 
                                             points[:,2] + offsetz
     axis1, axis2 = invert_axes
     points[:,axis1] = points[:,axis1]*cos(np.pi/18) - points[:,axis2]*sin(np.pi/18)
@@ -89,9 +88,9 @@ def get_img_pts(points, calib):
 def plot_3d_bbox(img, calib, bbox3d_center, bbox3d_dims, bbox3d_roty):
     h, w, l = bbox3d_dims
     x, y, z = bbox3d_center
-    p0, p1, p2, p3 = np.array([l/2,0,w/2,1]), np.array([-l/2,0,w/2,1]), \
+    p0, p1, p2, p3 = np.array([l/2,0,w/2,1]), np.array([-l/2,0,w/2,1]), 
                      np.array([-l/2,0,-w/2,1]), np.array([l/2,0,-w/2,1])
-    p4, p5, p6, p7 = np.array([l/2,-h,w/2,1]), np.array([-l/2,-h,w/2,1]), \
+    p4, p5, p6, p7 = np.array([l/2,-h,w/2,1]), np.array([-l/2,-h,w/2,1]), 
                      np.array([-l/2,-h,-w/2,1]), np.array([l/2,-h,-w/2,1])
     pts_array = np.array([p0, p1, p2, p3, p4, p5, p6, p7]).transpose()
     rot_mat = np.array([[cos(bbox3d_roty), 0, sin(bbox3d_roty), 0],[0,1,0,0],
@@ -145,8 +144,8 @@ def generate_pts_in_rotated_rect(bbox_pts, res=0.3):
         b += res
     return inter_pts
 
-def generate_position_heatmap(panop_img, original_img, pt_cld_img, temp_blank_image,
-                              calib, rot_y, object_dict, offsets):
+def generate_position_heatmap(panop_img, original_img, pt_cld_img, temp_blank_image, calib, rot_y,
+                              object_dict, offsets):
     # Pedestrians can go on road, pavement, and grass
     # Cyclists can go on road and pavement
     # Cars can only go on road
@@ -157,10 +156,11 @@ def generate_position_heatmap(panop_img, original_img, pt_cld_img, temp_blank_im
     angle = rot_y % (2 * np.pi)
     height, width, channels = original_img.shape
     bbox3d_dims, bbox3d_loc = object_dict['bbox3d'][:3], object_dict['bbox3d'][3:]
-    first_dist = bbox3d_dims[2]
+    if 0.87 <= rot_y <= 2.27: first_dist = bbox3d_dims[2] + 0.5*bbox3d_dims[2]
+    else: first_dist = bbox3d_dims[2]
     start_steps = np.arange(0, first_dist, 0.1)
-    mid_steps = np.arange(first_dist, first_dist + 1.0, 0.1)
-    end_steps = np.arange(first_dist + 1.0, first_dist + 2.0, 0.1)
+    mid_steps = np.arange(start_steps[-1], start_steps[-1] + 0.5, 0.1)
+    end_steps = np.arange(mid_steps[-1], mid_steps[-1] + 1.0, 0.1)
     step_types = [start_steps, mid_steps, end_steps]
     color_types = {'RED': list(Color("red").range_to(Color("yellow"),start_steps.shape[0])),
                    'YELLOW': list(Color("yellow").range_to(Color("orange"),mid_steps.shape[0])),
@@ -175,45 +175,53 @@ def generate_position_heatmap(panop_img, original_img, pt_cld_img, temp_blank_im
 
     # project points forward and check if they lie on the road
     initial_step = True
+    got_no_pt = False
     inter_pts = generate_pts_in_rotated_rect(oriented_points[:4])
     offsetx, offsety, offsetz = offsets
+    pos_pts = 0
     for step_type, color_type, drivable_status in zip(step_types, color_types.values(), status_types):
         p_locs = [bbox3d_loc+np.array([step*cos(angle),0,step*sin(angle),0]) for step in step_type]
         b_locs = [inter_pt+np.array([step*cos(angle),0,step*sin(angle),0]) for step in step_type for
                   inter_pt in inter_pts]
         p_locs, b_locs = np.array(p_locs), np.array(b_locs)
         p_img_pts, b_img_pts = get_img_pts(p_locs, calib), get_img_pts(b_locs, calib)
-        p_img_pts = p_img_pts[np.logical_and(np.logical_and(p_img_pts[:,0]>=0, p_img_pts[:,0]<width),
-                                             np.logical_and(p_img_pts[:,1]>=0, p_img_pts[:,1]<height))]
-        b_img_pts = b_img_pts[np.logical_and(np.logical_and(b_img_pts[:,0]>=0, b_img_pts[:,0]<width),
-                                             np.logical_and(b_img_pts[:,1]>=0, b_img_pts[:,1]<height))]
-        persp_pts = diff_persp_not_velo(p_locs, calib, offsetx, offsety, offsetz, [1, 2])
+        persp_pts = diff_persp_not_velo(np.copy(p_locs), calib, offsetx, offsety, offsetz, [1, 2])
         if p_img_pts.size == 0 or b_img_pts.size == 0: continue
         iterator, skip_len = 0, b_img_pts.shape[0] // p_img_pts.shape[0]
         end_index = 0
         for p_pt, p_pt_persp in zip(p_img_pts, persp_pts):
+            if p_pt[0] < 0 or p_pt[0] >= width or p_pt[1] < 0 or p_pt[1] >= height: continue
             start_index = end_index
             end_index = start_index + iterator*skip_len
+            suitable_b_img_pts = b_img_pts[start_index:end_index]
+            suitable_b_img_pts = suitable_b_img_pts[np.logical_and(
+                np.logical_and(suitable_b_img_pts[:,0]>=0, suitable_b_img_pts[:,0]<width),
+                np.logical_and(suitable_b_img_pts[:,1]>=0, suitable_b_img_pts[:,1]<height))]
             rgb_val = color_type[iterator].rgb
             iterator += 1
             if panop_img[p_pt[1], p_pt[0]] in check_value and drivable_status == 'DANGER_CLOSE':
                 cv2.circle(original_img, tuple(p_pt), 3, (int(rgb_val[2]*256), int(rgb_val[1]*256), int(rgb_val[0]*256)), -1)
-                cv2.circle(pt_cld_img, tuple(p_pt), 3, (int(rgb_val[2]*256), int(rgb_val[1]*256), int(rgb_val[0]*256)), -1)
-                cv2.circle(temp_blank_image, tuple(p_pt), 5, 50, -1)
+                cv2.circle(pt_cld_img, tuple(p_pt_persp), 3, (int(rgb_val[2]*256), int(rgb_val[1]*256), int(rgb_val[0]*256)), -1)
+                cv2.circle(temp_blank_image, tuple(p_pt_persp), 5, 50, -1)
+                pos_pts += 1
                 continue
             if panop_img[p_pt[1], p_pt[0]] not in check_value: continue
-            if all(i in check_value for i in panop_img[b_img_pts[start_index:end_index,1], b_img_pts[start_index:end_index,0]]):
+            if all(i in check_value for i in panop_img[suitable_b_img_pts[:,1], suitable_b_img_pts[:,0]]):
+                pos_pts += 1
                 cv2.circle(original_img, tuple(p_pt), 3, (int(rgb_val[2]*256), int(rgb_val[1]*256), int(rgb_val[0]*256)), -1)
-                cv2.circle(pt_cld_img, tuple(p_pt), 3, (int(rgb_val[2]*256), int(rgb_val[1]*256), int(rgb_val[0]*256)), -1)
-                if drivable_status == 'SAFE': cv2.circle(temp_blank_image, tuple(p_pt), 1, 255, -1)
-                if drivable_status == 'CAUTIOUS': cv2.circle(temp_blank_image, tuple(p_pt), 5, 100, -1)
-                if drivable_status == 'DANGER_CLOSE': cv2.circle(temp_blank_image, tuple(p_pt), 5, 50, -1)
-            elif panop_img[b_img_pts[:,1], b_img_pts[:,0]].all() != 255 and not initial_step: break
+                cv2.circle(pt_cld_img, tuple(p_pt_persp), 3, (int(rgb_val[2]*256), int(rgb_val[1]*256), int(rgb_val[0]*256)), -1)
+                if drivable_status == 'CAUTIOUS': cv2.circle(temp_blank_image, tuple(p_pt_persp), 5, 100, -1)
+                if drivable_status == 'DANGER_CLOSE': cv2.circle(temp_blank_image, tuple(p_pt_persp), 5, 50, -1)
+            elif panop_img[suitable_b_img_pts[:,1], suitable_b_img_pts[:,0]].all() != 255 and not initial_step:
+                got_no_pt = True
+                break
         initial_step = False
+        if got_no_pt: break
+    return pos_pts
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_loc',
-                    default='/mnt/sdb1/datasets/kitti_tracking/training/0001', type=str,
+                    default='/mnt/sdb1/datasets/kitti_tracking/training/0020', type=str,
                     help='your data folder location')
 args = parser.parse_args()
 
@@ -221,7 +229,6 @@ args = parser.parse_args()
 left_img_folder = os.path.join(args.data_loc, 'image_2')
 calib_folder = os.path.join(args.data_loc, 'calib')
 velo_folder = os.path.join(args.data_loc, 'velodyne')
-label_folder = os.path.join(args.data_loc, 'label_2')
 
 allowable_dets = ['Car', 'Pedestrian', 'Cyclist']
 
@@ -229,10 +236,10 @@ road_class_folder = os.path.join(args.data_loc, 'ROAD_CLASSIFIER')
 Path(road_class_folder).mkdir(parents=True, exist_ok=True)
 
 # get panop images
-panop_img_folder = os.path.join(args.data_loc, 'PANOP_IMGS')
+panop_img_folder = os.path.join(args.data_loc, 'PANOP_REALTIME')
 
 # get detections
-det_folder = os.path.join(args.data_loc, 'DETS3D')
+det_folder = os.path.join(args.data_loc, 'POINTPILLARS_ALLCLASSES')
 det_files = natsort.natsorted(os.listdir(det_folder))
 
 road_class_folder = os.path.join(args.data_loc, 'ROAD_CLASSIFIER')
@@ -255,7 +262,7 @@ for left_img in left_imgs:      #MAKE CHANGES HERE TO ONLY GO THROUGH SOME IMAGE
     height, width, channels = loaded_img.shape
 
     # load detections
-    if not os.path.exists(os.path.join(det_folder, frame_num_str+'.txt')) or \
+    if not os.path.exists(os.path.join(det_folder, frame_num_str+'.txt')) or 
             os.stat(os.path.join(det_folder, frame_num_str+'.txt')).st_size < 10:
         continue
     det = pd.read_csv(os.path.join(det_folder, frame_num_str+'.txt'), sep=" ", header=None)
@@ -282,13 +289,18 @@ for left_img in left_imgs:      #MAKE CHANGES HERE TO ONLY GO THROUGH SOME IMAGE
 
     # draw point cloud from a top down perspective
     pt_cloud_img = np.zeros((height, width, channels), np.uint8)
-    pts2d_persp = diff_persp_is_velo(velo_pts, panop_img, clb, 5, 0, -2, [0,2])
-    original_road_pts = get_pts_from_vel(velo_pts, clb)
+    pts2d_persp = diff_persp_is_velo(np.copy(velo_pts), panop_img, clb, 5, 0, -2, [0,2])
     pt_cloud_img[pts2d_persp[:,1], pts2d_persp[:,0]] = (255,255,255)
 
     # store all 3d detections in a list of dictionaries
     all_dets = [{'name': name, 'roty': box[-1], 'bbox3d': box[:6], 'dist': np.linalg.norm(box[3:6])}
                 for name, box in zip(names, boxes)]
+    # for det in all_dets:
+    #     bbox3d_dims, bbox3d_loc = det['bbox3d'][:3], det['bbox3d'][3:]
+    #     _ = plot_3d_bbox(loaded_img, clb, bbox3d_loc, bbox3d_dims, det['roty'])
+    # cv2.imshow('', loaded_img)
+    # cv2.waitKey(10)
+    # continue
 
     all_dets = sorted(all_dets, key=lambda k: k['dist'])
     if len(all_dets) >= 3: all_dets = all_dets[:3]
@@ -296,6 +308,8 @@ for left_img in left_imgs:      #MAKE CHANGES HERE TO ONLY GO THROUGH SOME IMAGE
 
     # draw heatmap
     temp_blank_image = np.zeros((height, width), np.uint8)
+    show_front = True
+    all_texts, all_text_locs, all_probs = [], [], []
     while True:
         theta = all_dets[object_iter]['roty']
         name = all_dets[object_iter]['name']
@@ -305,13 +319,17 @@ for left_img in left_imgs:      #MAKE CHANGES HERE TO ONLY GO THROUGH SOME IMAGE
         # object facing towards you has positive rotation (clockwise from positive z axis)
         orient = abs(theta) if theta <= 0 else 2*np.pi - theta
         res = np.pi/180
-        left_angles = [(orient+i*res)%(2*np.pi) for i in range(int((np.pi/2) // res)+1)]
-        right_angles = [(orient-i*res)%(2*np.pi) for i in range(1,int((np.pi/2) // res)+1)]
-        all_angles = left_angles + right_angles
+        left_front = [(orient+i*res)%(2*np.pi) for i in range(int((2*np.pi/9) // res)+1)]
+        full_left = [(left_front[-1]+i*res)%(2*np.pi) for i in range(int((5*np.pi/18) // res)+1)]
+        left_back = [(full_left[-1]+i*res)%(2*np.pi) for i in range(int((np.pi/6) // res)+1)]
+        right_front = [(orient-i*res)%(2*np.pi) for i in range(1,int((2*np.pi/9) // res)+1)]
+        full_right = [(right_front[-1]-i*res)%(2*np.pi) for i in range(1,int((5*np.pi/18) // res)+1)]
+        right_back = [(full_right[-1]-i*res)%(2*np.pi) for i in range(1,int((np.pi/6) // res)+1)]
 
         # create bounding box in the beginning
         points = plot_3d_bbox(loaded_img, clb, bbox3d_loc, bbox3d_dims, all_dets[object_iter]['roty'])
         points2d = diff_persp_not_velo(points, clb, 0, 2, 5, [1, 2])
+        cv2.fillPoly(temp_blank_image, [points2d[:4]], 50)
         for i in range(4):
             pt1, pt2, pt3, pt4 = points2d[i%4], points2d[(i+1)%4], points2d[(i+4)%8], points2d[(i+5)%8]
             pt5, pt6 = points2d[(i%4)+4], points2d[((i+1)%4)+4]
@@ -323,63 +341,137 @@ for left_img in left_imgs:      #MAKE CHANGES HERE TO ONLY GO THROUGH SOME IMAGE
         cv2.line(pt_cloud_img, tuple(points2d[3]), tuple(points2d[4]), (0, 0, 255), 3)
         center2d = diff_persp_not_velo(np.append(bbox3d_loc, 1), clb, 0, 2, 5, [1, 2])
         cv2.circle(pt_cloud_img, tuple(center2d[0]), 3, (255, 255, 255), -1)
-        processes = []
-        for angle in all_angles:
-            input_args = (panop_img, loaded_img, pt_cloud_img, temp_blank_image, clb, angle,
-                          all_dets[object_iter], [0, 2, 5],)
-            proc = Process(target=generate_position_heatmap, args=input_args)
-            processes.append(proc)
-            proc.start()
-            # generate_position_heatmap(panop_img, loaded_img, pt_cloud_img, temp_blank_image,
-            #                           clb, angle, all_dets[object_iter], [0, 2, 5])
-        for p in processes: p.join()
+        angle_type = 0
+        angle_string = ['left_front','full_left','left_back','right_front','full_right','right_back']
+        angle_dict = {'left_front': 0, 'full_left': 0, 'left_back': 0,
+                      'right_front': 0, 'full_right': 0, 'right_back': 0}
+        total_ps = 0
+        for all_angles in [left_front, full_left, left_back, right_front, full_right, right_back]:
+            for angle in all_angles:
+                pos = generate_position_heatmap(panop_img, loaded_img, pt_cloud_img, temp_blank_image,
+                                                          clb, angle, all_dets[object_iter], [0, 2, 5])
+                angle_dict[angle_string[angle_type]] += pos
+                total_ps += pos
+            angle_type += 1
+
+        if total_ps != 0:
+            left_prob = (angle_dict['full_left'] + angle_dict['left_back']) / total_ps
+            right_prob = (angle_dict['full_right'] + angle_dict['right_back']) / total_ps
+            straight_prob = (angle_dict['left_front'] + angle_dict['right_front']) / total_ps
+            left_prob = round(left_prob, 2)
+            right_prob = round(right_prob, 2)
+            straight_prob = round(straight_prob, 2)
+            left_prob_text = 'LEFT:'
+            right_prob_text = 'RIGHT:'
+            straight_prob_text = 'STRAIGHT:'
+            if show_front:
+                pt = 4
+                show_front = False
+            else:
+                pt = 5
+                show_front = True
+            left_prob_text_loc = (points2d[pt][0], points2d[pt][1]-50)
+            right_prob_text_loc = (points2d[pt][0], points2d[pt][1]-30)
+            straight_prob_text_loc = (points2d[pt][0], points2d[pt][1]-10)
+            all_texts.append([left_prob_text, right_prob_text, straight_prob_text])
+            all_text_locs.append([left_prob_text_loc, right_prob_text_loc, straight_prob_text_loc])
+            all_probs.append([left_prob, right_prob, straight_prob])
+
         if object_iter < len(all_dets) - 1: object_iter += 1
         else: break     # if you have arrived at the end of your object list, then leave
 
-    road_pts = [rp for rp in original_road_pts
-                if temp_blank_image[rp['pixel_loc'][1], rp['pixel_loc'][0]] not in [100, 50] and rp['dist'] <= 20]
-    for rp in road_pts: cv2.circle(pt_cloud_img, tuple(rp['pixel_loc']), 1, (255, 0, 0), -1)
-
-    # another_temp_blank_image = np.zeros((height, width), np.uint8)
-    # for r in road_pts: cv2.circle(another_temp_blank_image, tuple(r['pixel_loc']), 1, (255, 0, 0), -1)
-    # cv2.imshow('1', another_temp_blank_image)
-    # cv2.imshow('2', temp_blank_image)
-    # cv2.waitKey(100000)
-
-    if road_pts:
-        road_pts = sorted(road_pts, key=lambda k: k['angle'])
-        # give speed and steering recommendations here
-        speed, steering = 'AS YOU WISH', np.pi/2
-        if len(road_pts) / len(original_road_pts) <= 0.7: speed = 'MODERATE'
-        if len(road_pts) / len(original_road_pts) <= 0.3: speed = 'SLOW DOWN!'
-        if (speed == 'MODERATE' or speed == 'SLOW DOWN!') and len(road_pts) != 0:
-            steering = sum(item['angle'] for item in road_pts) / len(road_pts)
-        # if steering > np.pi/2:
-        #     selected_pts = [r for r in road_pts if r['angle'] >= np.pi/2]
-        #     if selected_pts: steering = selected_pts[0]['angle']
-        # else:
-        #     selected_pts = [r for r in road_pts if r['angle'] < np.pi/2]
-        #     if selected_pts: steering = selected_pts[-1]['angle']
-        print(degrees(steering))
+    if all_texts:
         font = cv2.FONT_HERSHEY_SIMPLEX
-        speed_text = 'RECOMMENDED SPEED: ' + speed
-        steer_text = 'RECOMMENDED STEERING:'
-        speed_text_loc = (2*width//3, 50)
-        steer_text_loc = (2*width//5, 80)
-        cv2.putText(loaded_img, speed_text, speed_text_loc, font, 0.6, (0,0,0), 4, cv2.LINE_AA)
-        cv2.putText(loaded_img, speed_text, speed_text_loc, font, 0.6, (255,255,255), 1, cv2.LINE_AA)
-        cv2.putText(loaded_img, steer_text, steer_text_loc, font, 0.6, (0,0,0), 4, cv2.LINE_AA)
-        cv2.putText(loaded_img, steer_text, steer_text_loc, font, 0.6, (255,255,255), 1, cv2.LINE_AA)
-        circle_center = (width//2, height//2)
-        circle_radius = 100
-        cv2.circle(loaded_img, circle_center, circle_radius, (0,0,0), 4)
-        cv2.circle(loaded_img, circle_center, circle_radius, (255,255,255), 1)
-        p = [int(circle_center[0] + circle_radius*cos(steering)),
-             int(circle_center[1] + circle_radius*sin(steering))]
-        y_rel = p[1] - circle_center[1]
-        p[1] -= 2*y_rel
-        cv2.line(loaded_img, circle_center, tuple(p), (0,0,0), 4)
-        cv2.line(loaded_img, circle_center, tuple(p), (255,255,255), 1)
+        for text_val_list, text_loc_list, prob_list in zip(all_texts, all_text_locs, all_probs):
+            for text_val, text_loc, prob in zip(text_val_list, text_loc_list, prob_list):
+                cv2.putText(pt_cloud_img, text_val, text_loc, font, 0.6, (0,0,0), 4, cv2.LINE_AA)
+                cv2.putText(pt_cloud_img, text_val, text_loc, font, 0.6, (255,255,255), 2, cv2.LINE_AA)
+                x, y = text_loc
+                bar_loc_start = (x+100, y-5)
+                bar_loc_prog = (x+100+int(prob*100), y-5)
+                cv2.line(pt_cloud_img, bar_loc_start, bar_loc_prog, (0, 0, 0), 15)
+                cv2.line(pt_cloud_img, bar_loc_start, bar_loc_prog, (255, 255, 255), 10)
+
+    # draw forward arc that will be used for giving speed and steering recommendations
+    right_ego_angles = np.arange(np.pi/6, (np.pi/2)+0.01, 0.01)
+    left_ego_angles = np.arange(np.pi/2, (4*np.pi/5)+0.01, 0.01)
+    dist_from_car = 6.0
+    right_ego_pts = np.array([np.array([dist_from_car*cos(ego_angle), 1, dist_from_car*sin(ego_angle), 1])
+                              for ego_angle in right_ego_angles])
+    left_ego_pts = np.array([np.array([dist_from_car*cos(ego_angle), 1, dist_from_car*sin(ego_angle), 1])
+                             for ego_angle in left_ego_angles])
+    ego_right_persp = diff_persp_not_velo(np.copy(right_ego_pts), clb, 0, 2, 5, [1, 2])
+    ego_left_persp = diff_persp_not_velo(np.copy(left_ego_pts), clb, 0, 2, 5, [1, 2])
+
+    total_pts = 0
+    right_bad_pts = 0
+    right_angle_counter = 0
+    right_angle_val = 0
+    for ego_r in ego_right_persp:
+        if ego_r[0] < 0 or ego_r[0] >= width or ego_r[1] < 0 or ego_r[1] >= height: continue
+        # cv2.circle(pt_cloud_img, tuple(ego_r), 5, (144,238,144), -1)
+        if temp_blank_image[ego_r[1], ego_r[0]] == 50:
+            right_bad_pts += 1
+            right_angle_val += right_ego_angles[right_angle_counter]
+            # cv2.circle(pt_cloud_img, tuple(ego_r), 5, (0,0,255), -1)
+        if temp_blank_image[ego_r[1], ego_r[0]] == 100:
+            right_bad_pts += 1
+            right_angle_val += right_ego_angles[right_angle_counter]
+            # cv2.circle(pt_cloud_img, tuple(ego_r), 5, (0,255,255), -1)
+        right_angle_counter += 1
+        total_pts += 1
+    left_bad_pts = 0
+    left_angle_counter = 0
+    left_angle_val = 0
+    for ego_l in ego_left_persp:
+        if ego_l[0] < 0 or ego_l[0] >= width or ego_l[1] < 0 or ego_l[1] >= height: continue
+        # cv2.circle(pt_cloud_img, tuple(ego_l), 5, (144,238,144), -1)
+        if temp_blank_image[ego_l[1], ego_l[0]] == 50:
+            left_bad_pts += 1
+            left_angle_val += left_ego_angles[left_angle_counter]
+            # cv2.circle(pt_cloud_img, tuple(ego_l), 5, (0,0,255), -1)
+        if temp_blank_image[ego_l[1], ego_l[0]] == 100:
+            left_bad_pts += 1
+            left_angle_val += left_ego_angles[left_angle_counter]
+            # cv2.circle(pt_cloud_img, tuple(ego_l), 5, (0,255,255), -1)
+        left_angle_counter += 1
+        total_pts += 1
+
+    # give speed and steering recommendations here
+    speed, steering = 100, np.pi/2
+    good_bad_ratio = (right_bad_pts + left_bad_pts) / total_pts
+    get_steer = False
+    if good_bad_ratio >= 0.1:
+        speed = 100 - (100 * good_bad_ratio)
+        get_steer = True
+    if get_steer and left_bad_pts > right_bad_pts:
+        steering = np.pi/2 - ((left_angle_val/left_bad_pts) - np.pi/2)
+    if get_steer and left_bad_pts < right_bad_pts:
+        steering = np.pi/2 + (np.pi/2 - (right_angle_val/right_bad_pts))
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    speed_text = 'RECOMMENDED SPEED:'
+    steer_text = 'RECOMMENDED STEERING:'
+    speed_text_loc = (2*width//3, 50)
+    steer_text_loc = (2*width//5, 80)
+    speed_bar_loc_start = ((2*width//3)+250, 45)
+    speed_bar_loc_prog = ((2*width//3)+250+int(speed), 45)
+    speed_bar_loc_end = ((2*width//3)+350, 45)
+    cv2.line(loaded_img, speed_bar_loc_start, speed_bar_loc_end, (0, 0, 0), 15)
+    cv2.line(loaded_img, speed_bar_loc_start, speed_bar_loc_prog, (255, 255, 255), 10)
+    cv2.putText(loaded_img, speed_text, speed_text_loc, font, 0.6, (0,0,0), 4, cv2.LINE_AA)
+    cv2.putText(loaded_img, speed_text, speed_text_loc, font, 0.6, (255,255,255), 1, cv2.LINE_AA)
+    cv2.putText(loaded_img, steer_text, steer_text_loc, font, 0.6, (0,0,0), 4, cv2.LINE_AA)
+    cv2.putText(loaded_img, steer_text, steer_text_loc, font, 0.6, (255,255,255), 1, cv2.LINE_AA)
+    circle_center = (width // 2, height // 2)
+    circle_radius = 100
+    cv2.circle(loaded_img, circle_center, circle_radius, (0, 0, 0), 4)
+    cv2.circle(loaded_img, circle_center, circle_radius, (255, 255, 255), 1)
+    p = [int(circle_center[0] + circle_radius * cos(steering)),
+         int(circle_center[1] + circle_radius * sin(steering))]
+    y_rel = p[1] - circle_center[1]
+    p[1] -= 2 * y_rel
+    cv2.line(loaded_img, circle_center, tuple(p), (0, 0, 0), 4)
+    cv2.line(loaded_img, circle_center, tuple(p), (255, 255, 255), 1)
 
     # draw heatmap legend on image
     start_steps = np.arange(0, 1.0, 0.1)
@@ -397,7 +489,6 @@ for left_img in left_imgs:      #MAKE CHANGES HERE TO ONLY GO THROUGH SOME IMAGE
             rgb_val = color_val.rgb
             rgb_val = (int(rgb_val[2]*256), int(rgb_val[1]*256), int(rgb_val[0]*256))
             x_val = int(50 + (step/all_steps[-1])*50) + 10*counter
-            cv2.circle(pt_cloud_img, (x_val,50), 10, rgb_val, -1)
             cv2.circle(loaded_img, (x_val, 50), 10, rgb_val, -1)
 
             if counter in [0, 15, 39]:
@@ -406,11 +497,9 @@ for left_img in left_imgs:      #MAKE CHANGES HERE TO ONLY GO THROUGH SOME IMAGE
                 text_rgb = color_type[color_ind].rgb
                 text_rgb = (int(text_rgb[2]*256), int(text_rgb[1]*256), int(text_rgb[0]*256))
                 cv2.putText(loaded_img, text, (x_val, 80), font, 0.5, (0,0,0), 4, cv2.LINE_AA)
-                cv2.putText(pt_cloud_img, text, (x_val, 80), font, 0.5, (0,0,0), 4, cv2.LINE_AA)
                 cv2.putText(loaded_img, text, (x_val, 80), font, 0.5, text_rgb, 2, cv2.LINE_AA)
-                cv2.putText(pt_cloud_img, text, (x_val, 80), font, 0.5, text_rgb, 2, cv2.LINE_AA)
             counter += 1
     cv2.imshow('BBOXES AND POINT CLOUD', cv2.vconcat([loaded_img, pt_cloud_img]))
     cv2.imwrite(os.path.join(road_class_folder, left_img), cv2.vconcat([loaded_img, pt_cloud_img]))
-    print(left_img)
+    print('DONE ' + left_img + ' OUT OF ' + left_imgs[-1])
     cv2.waitKey(1)
