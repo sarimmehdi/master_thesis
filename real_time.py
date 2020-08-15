@@ -109,7 +109,7 @@ def plot_3d_bbox(img, calib, bbox3d_center, bbox3d_dims, bbox3d_roty):
     center_pt_img = get_img_pts(np.append(bbox3d_center, 1).reshape(-1,4), calib)
     cv2.circle(img, tuple(center_pt_img[0]), 3, (255, 255, 255), -1)
 
-    return pts_array
+    return pts_array, box_3d
 
 # generate evenly spaced points inside any rect
 def generate_pts_in_rotated_rect(bbox_pts, res=0.3):
@@ -170,7 +170,7 @@ def generate_position_heatmap(panop_img, original_img, pt_cld_img, temp_blank_im
     # rotate bounding box based on angle
     if 0 <= angle <= np.pi: theta = -angle
     if np.pi < angle <= 2*np.pi: theta = 2*np.pi - angle
-    oriented_points = plot_3d_bbox(np.copy(original_img), calib, bbox3d_loc, bbox3d_dims, theta)
+    oriented_points, _ = plot_3d_bbox(np.copy(original_img), calib, bbox3d_loc, bbox3d_dims, theta)
     bbox3d_loc = np.append(bbox3d_loc, 1)
 
     # project points forward and check if they lie on the road
@@ -262,9 +262,7 @@ for left_img in left_imgs:      #MAKE CHANGES HERE TO ONLY GO THROUGH SOME IMAGE
     height, width, channels = loaded_img.shape
 
     # load detections
-    if not os.path.exists(os.path.join(det_folder, frame_num_str+'.txt')) or 
-            os.stat(os.path.join(det_folder, frame_num_str+'.txt')).st_size < 10:
-        continue
+    if not os.path.exists(os.path.join(det_folder, frame_num_str+'.txt')): continue
     det = pd.read_csv(os.path.join(det_folder, frame_num_str+'.txt'), sep=" ", header=None)
     det = list(det.to_numpy())
     names = [label_line[0] for label_line in det if label_line[0] in allowable_dets]
@@ -297,7 +295,7 @@ for left_img in left_imgs:      #MAKE CHANGES HERE TO ONLY GO THROUGH SOME IMAGE
                 for name, box in zip(names, boxes)]
     # for det in all_dets:
     #     bbox3d_dims, bbox3d_loc = det['bbox3d'][:3], det['bbox3d'][3:]
-    #     _ = plot_3d_bbox(loaded_img, clb, bbox3d_loc, bbox3d_dims, det['roty'])
+    #     _, _ = plot_3d_bbox(loaded_img, clb, bbox3d_loc, bbox3d_dims, det['roty'])
     # cv2.imshow('', loaded_img)
     # cv2.waitKey(10)
     # continue
@@ -327,7 +325,7 @@ for left_img in left_imgs:      #MAKE CHANGES HERE TO ONLY GO THROUGH SOME IMAGE
         right_back = [(full_right[-1]-i*res)%(2*np.pi) for i in range(1,int((np.pi/6) // res)+1)]
 
         # create bounding box in the beginning
-        points = plot_3d_bbox(loaded_img, clb, bbox3d_loc, bbox3d_dims, all_dets[object_iter]['roty'])
+        points, _ = plot_3d_bbox(loaded_img, clb, bbox3d_loc, bbox3d_dims, all_dets[object_iter]['roty'])
         points2d = diff_persp_not_velo(points, clb, 0, 2, 5, [1, 2])
         cv2.fillPoly(temp_blank_image, [points2d[:4]], 50)
         for i in range(4):
