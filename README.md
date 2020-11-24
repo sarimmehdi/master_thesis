@@ -1,4 +1,5 @@
 # master_thesis
+I have uploaded a video presentation about this project: https://www.youtube.com/watch?v=yULuUazYcsU
 
 I have written about this project in detail here: https://medium.com/@sarim.mehdi.550/trajectory-prediction-for-adas-d1210e01f15
 
