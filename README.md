@@ -1,4 +1,6 @@
 # master_thesis
+You can also find the full draft for my Master Thesis here: https://www.researchgate.net/publication/346541545_Trajectory_Prediction_for_ADAS
+
 I have uploaded a video presentation about this project: https://www.youtube.com/watch?v=yULuUazYcsU
 
 I have written about this project in detail here: https://medium.com/@sarim.mehdi.550/trajectory-prediction-for-adas-d1210e01f15
