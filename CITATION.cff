@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Mehdi"
+  given-names: "Muhammad Sarim"
+  researchgate: "https://www.researchgate.net/profile/Muhammad-Sarim-Mehdi"
+title: "Trajectory Prediction for ADAS"
+version: 1.0.0
+date-released: 2020-1-12
+url: "https://github.com/sarimmehdi/master_thesis"
